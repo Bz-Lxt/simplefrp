@@ -156,10 +156,10 @@ func (a *Agent) handleStream(ctx context.Context, stream net.Conn) {
 		a.log.Warn("pool exhausted", "err", err)
 		return
 	}
+	defer a.pool.Discard(local)
 	a.log.Debug("stream accepted, local conn acquired")
 	if err := forward.Pipe(ctx, stream, local, nil, nil); err != nil && !errors.Is(err, context.Canceled) {
 		a.log.Debug("stream forward ended", "err", err)
-		a.pool.Discard(local)
 	}
 }
 
