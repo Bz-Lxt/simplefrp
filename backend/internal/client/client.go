@@ -69,7 +69,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 		err := a.session(ctx)
 		was := a.connected.Swap(false)
-		if ctx.Err() != nil || (err != nil && !was) {
+		if ctx.Err() != nil {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			_ = hs.Shutdown(shutdownCtx)
 			cancel()
