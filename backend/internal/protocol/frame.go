@@ -64,7 +64,11 @@ func ReadFrameDeadline(conn deadlineConn, v any, d time.Duration) error {
 	if err := conn.SetDeadline(time.Now().Add(d)); err != nil {
 		return err
 	}
-	defer conn.SetReadDeadline(time.Time{})
+	// Clear BOTH read and write deadlines. SetDeadline sets both, so clearing
+	// only the read side (SetReadDeadline) would leave a stale write deadline
+	// that later causes the first yamux keepalive / window-update write to fail
+	// with "i/o timeout", tearing down an otherwise healthy idle control tunnel.
+	defer conn.SetDeadline(time.Time{})
 	return ReadFrame(conn, v)
 }
 
@@ -72,4 +76,5 @@ type deadlineConn interface {
 	io.Reader
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
 }
