@@ -151,9 +151,12 @@ func (a *Agent) acceptLoops(ctx context.Context, sess *yamux.Session) error {
 
 func (a *Agent) handleStream(ctx context.Context, stream net.Conn) {
 	defer stream.Close()
-	ctx, cancel := context.WithTimeout(ctx, a.cfg.PoolWait)
-	defer cancel()
-	local, err := a.pool.Get(ctx)
+	// PoolWait limits only the "waiting for a local connection" phase. It must
+	// not be carried into forward.Pipe, otherwise established long-lived
+	// visitor sessions get torn down after PoolWait elapses.
+	poolCtx, cancel := context.WithTimeout(ctx, a.cfg.PoolWait)
+	local, err := a.pool.Get(poolCtx)
+	cancel()
 	if err != nil {
 		a.log.Warn("pool exhausted", "err", err)
 		return
