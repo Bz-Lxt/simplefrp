@@ -50,8 +50,16 @@ func ReadFrame(r io.Reader, v any) error {
 	if n > maxFrame {
 		return ErrFrameTooLarge
 	}
-	decoder := json.NewDecoder(io.LimitReader(r, int64(n)))
-	if err := decoder.Decode(v); err != nil {
+	// Read the full declared payload before decoding. This makes a frame whose
+	// declared length exceeds the bytes the peer actually sent fail with
+	// io.ErrUnexpectedEOF, so it is rejected before any auth/handshake work
+	// proceeds. It also prevents trailing bytes (auth JSON + junk) from being
+	// accepted as a valid frame and from leaking into the next read.
+	body := make([]byte, n)
+	if _, err := io.ReadFull(r, body); err != nil {
+		return fmt.Errorf("protocol read body: %w", err)
+	}
+	if err := json.Unmarshal(body, v); err != nil {
 		return fmt.Errorf("protocol unmarshal: %w", err)
 	}
 	return nil
