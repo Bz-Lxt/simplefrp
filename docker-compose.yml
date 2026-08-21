@@ -1,0 +1,97 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: server
+    environment:
+      TZ: Asia/Shanghai
+      SIMPLEFRP_TOKEN: simplefrp-dev-token
+      SIMPLEFRP_BIND_CTRL: 0.0.0.0:7000
+      SIMPLEFRP_BIND_VISITOR: 0.0.0.0:8080
+      SIMPLEFRP_BIND_API: 0.0.0.0:9090
+      SIMPLEFRP_LOG_LEVEL: info
+    ports:
+      - "42817:8080"
+      - "42818:9090"
+      - "42819:7000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/api/v1/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  demo:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: demo
+    environment:
+      TZ: Asia/Shanghai
+      SIMPLEFRP_BIND_HTTP: 0.0.0.0:8080
+      SIMPLEFRP_NODE_ID: intranet-alpha-7
+      SIMPLEFRP_LOG_LEVEL: info
+    ports:
+      - "42820:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 8s
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: client
+    environment:
+      TZ: Asia/Shanghai
+      SIMPLEFRP_TOKEN: simplefrp-dev-token
+      SIMPLEFRP_SERVER_ADDR: server:7000
+      SIMPLEFRP_LOCAL_ADDR: demo:8080
+      SIMPLEFRP_CLIENT_ID: edge-01
+      SIMPLEFRP_POOL_MAX_IDLE: "8"
+      SIMPLEFRP_POOL_MAX_ACTIVE: "128"
+      SIMPLEFRP_POOL_IDLE_TTL: 30s
+      SIMPLEFRP_BIND_HEALTH: 0.0.0.0:9091
+      SIMPLEFRP_LOG_LEVEL: info
+    depends_on:
+      server:
+        condition: service_healthy
+      demo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9091/api/v1/health | grep -q '\"connected\":true'"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    restart: unless-stopped
+
+  qa:
+    build:
+      context: ./tests
+      dockerfile: Dockerfile
+    environment:
+      TZ: Asia/Shanghai
+      VISITOR_URL: http://server:8080
+      STATUS_URL: http://server:9090
+      DEMO_URL: http://demo:8080
+      CLIENT_HEALTH_URL: http://client:9091
+      EXPECTED_NODE_ID: intranet-alpha-7
+    volumes:
+      - ./tests:/workspace/tests:ro
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+    depends_on:
+      server:
+        condition: service_healthy
+      client:
+        condition: service_healthy
+      demo:
+        condition: service_healthy
+    restart: unless-stopped
